@@ -1,0 +1,8 @@
+matplotlib==3.10.3
+numpy==1.23.2
+numpy==1.20.1
+tensordict==0.7.2
+torch==2.6.0
+torchrl==0.7.2
+tqdm==4.67.1
+tqdm==4.66.2
