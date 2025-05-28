@@ -1,5 +1,6 @@
 import torch
 import random
+import numpy as np
 
 
 def select_action(agent, state, valid_actions_mask, epsilon=None):
@@ -35,3 +36,18 @@ def load_agent(path, agent_class):
     agent.load_state_dict(state_dict)
 
     return agent
+
+
+def load_agent_n_rewards(path, agent_class):
+    agent = load_agent(path, agent_class)
+    rewards = load_rewards(path + ".rwd")
+    return agent, rewards
+
+
+def save_rewards(path, rewards):
+    arr = np.array(rewards)
+    np.savetxt(path, arr, fmt="%d")
+
+
+def load_rewards(path):
+    return np.loadtxt(path, dtype=int)

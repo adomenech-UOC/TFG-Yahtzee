@@ -1,7 +1,7 @@
-from agents.DuelingDQN import DuelingDQN
-from src.agents.Actor import Actor
-from src.agents.BasicAgent import BasicAgent
-from src.agents.Critic import Critic
+from agents.Actor import Actor
+from agents.BasicAgent import BasicAgent
+from agents.Critic import Critic
+from agents.DQN import DQN
 import trainer
 import agents.utils as AgentUtils
 import os
@@ -72,14 +72,10 @@ def train_a2c_model():
     minutes, seconds = divmod(rem, 60)
     print("Training time: {:0>2}:{:0>2}:{:05.2f}".format(int(hours),int(minutes),seconds))
 
-    # n_plays = 100
-    # avg_score, median_score = trainer.evaluate_model(agent, n_plays)
-    # print_results(n_plays, avg_score, median_score)
-
 def load_model():
     path = os.path.dirname(os.path.realpath(__file__))
     # path = os.path.join(path, "../models/", "DuelingDQN_2025-04-21_17-03-00")
-    path = os.path.join(path, "../models/", "Actor_2025-05-17_19-36-39")
+    path = os.path.join(path, "../models/", "Actor_2025-05-22_20-01-28")
     
     model = AgentUtils.load_agent(path, Actor)
     n_plays = 100
@@ -94,7 +90,7 @@ def print_results(n_plays, avg_score, median_score):
 
 def test_a2c():
     params = {
-    "n_plays": 10000,   
+    "n_plays": 5000,   
     "lr_actor": 0.001,
     "lr_critic": 0.001,
     "save_agent": True,
@@ -116,7 +112,7 @@ def test_a2c():
 
 def test_dqn():
     params = {
-        "n_plays": 2000,   
+        "n_plays": 200,   
         "batch_size": 256,
         "buffer_capacity": 10000,
         "lr": 0.0001,
@@ -132,18 +128,15 @@ def test_dqn():
 
     start = time.time()
 
-    agent,  _, _, results = trainer.train_dqn_agent(DuelingDQN, **params)
+    agent,  _, _, results = trainer.train_dqn_agent(DQN, **params)
     
     logger.print_time(start)
 
-    logger.print_train_results(results)
+    logger.print_train_results(results, agent.name)
 
+    n_plays = 100
     avg_score, median_score, scores = trainer.evaluate_model(agent, 100)
-
-    logger.print_train_results(scores)
+    print_results(n_plays, avg_score, median_score)
 
 if __name__ == "__main__":
-    # train_a2c_model()
-    # load_model()
-    test_a2c()
-    # test_dqn()
+    test_dqn()

@@ -1,7 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class Actor(nn.Module):
     def __init__(self, input_size, action_size, hidden_dim=64):
         super(Actor, self).__init__()

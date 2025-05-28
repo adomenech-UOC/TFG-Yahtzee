@@ -95,13 +95,7 @@ def train_dqn_agent(
                 dqn, state, valid_actions_mask, epsilon)
 
             # Convert action index to game action
-            if action_idx < 32:
-                keep_mask = [bool(int(bit)) for bit in f"{action_idx:05b}"]
-                action = ('reroll', keep_mask)
-            else:
-                cat_idx = action_idx - 32
-                category = list(env.categories.keys())[cat_idx]
-                action = ('score', category)
+            action = env.index_to_action(action_idx)
 
             logger.log(f"Dice before step: {env.dice}")
 
@@ -114,12 +108,6 @@ def train_dqn_agent(
 
             next_state = torch.FloatTensor(next_state)
             next_valid_mask = env.get_valid_actions_mask()
-
-            # Debugging statements
-            if action_idx >= 32:
-                logger.log("Score: ")
-                logger.log(env.get_state()['categories'][category])
-                logger.log("\n")
 
             # Store experience in replay buffer
             experience = TensorDict({
@@ -227,7 +215,8 @@ def train_dqn_agent(
     dir_path = save_model(
         dqn,
         n_plays,
-        total_steps
+        total_steps,
+        results
     ) if save_agent else ""
 
     return dqn, target_dqn, dir_path, results
@@ -268,9 +257,9 @@ def train_a2c_agent(
         # init environment with state, done status, and valid action mask
         state_dict = env.reset()
         state = env.get_encoded_state()
-        done = False
         valid_actions_mask = env.get_valid_actions_mask()
 
+        done = False
         while not done:
             state_tensor = torch.FloatTensor(state)
             # Actor selects action
@@ -280,16 +269,10 @@ def train_a2c_agent(
             dist = Categorical(action_probs)
             sample = dist.sample()
 
-            # Convert action index to game action
-            if action_idx < 32:
-                keep_mask = [bool(int(bit)) for bit in f"{action_idx:05b}"]
-                action = ('reroll', keep_mask)
-            else:
-                cat_idx = action_idx - 32
-                category = list(env.categories.keys())[cat_idx]
-                action = ('score', category)
-
             logger.log(f"Dice before step: {env.dice}")
+
+            # Convert action index to game action
+            action = env.index_to_action(action_idx)
 
             # Execute action
             rolls_left = env.rolls_left
@@ -301,36 +284,28 @@ def train_a2c_agent(
             next_state = torch.FloatTensor(next_state)
             next_valid_mask = env.get_valid_actions_mask()
 
-            # Debugging statements
-            if action_idx >= 32:
-                logger.log(
-                    f"Score: {env.get_state()['categories'][category]}\n")
-
             # Critic estimates value function
-            # value = critic(state_tensor)
-            # next_value = critic(next_state)
-            _, value = AgentUtils.select_action(
-                actor, state_tensor, valid_actions_mask)
-            _, next_value = AgentUtils.select_action(
-                actor, next_state, valid_actions_mask)
+            value = critic(state_tensor)
+            next_value = critic(next_state)
 
             # Calculate TD target and Advantage
             td_target = reward + gamma * next_value * (1 - done)
             advantage = td_target - value
 
             # Critic update with MSE loss
-            critic_loss = F.mse_loss(value, td_target.detach())
-            critic_loss.requires_grad = True
             optimizer_critic.zero_grad()
-            critic_loss.backward()
+            critic_loss = F.mse_loss(value, td_target.detach(),
+                                     reduction="none")
+            # critic_loss.requires_grad = True
+            critic_loss.sum().backward()
             optimizer_critic.step()
 
             # Actor update
+            optimizer_actor.zero_grad()
             log_prob = dist.log_prob(sample)
             actor_loss = torch.sum(-log_prob * advantage.detach())
             actor_loss.requires_grad = True
-            optimizer_actor.zero_grad()
-            actor_loss.backward()
+            actor_loss.sum().backward()
             optimizer_actor.step()
 
             # Update state, episode return, and step count
@@ -344,19 +319,12 @@ def train_a2c_agent(
 
         results.append(final_score)
 
-        # Play statistics
-        if (play + 1) % 100 == 0 and debug:
-            final_score = sum(
-                v for v in env.categories.values() if v is not None)
-            final_score += env.upper_bonus + env.yahtzee_bonuses
-            print(
-                f"Play {play+1}: Training score = {final_score:.1f}")
-
     # Final save at the end of training
     dir_path = save_model(
         actor,
         n_plays,
-        total_steps
+        total_steps,
+        results
     ) if save_agent else ""
 
     return actor, critic, dir_path, results
@@ -417,7 +385,8 @@ def evaluate_model(model, n_plays=500):
 def save_model(
     agent,
     play,
-    total_steps
+    total_steps,
+    rewards
 ):
     data = {
         'state_dict': agent.state_dict(),
@@ -426,11 +395,16 @@ def save_model(
         'total_steps': total_steps
     }
 
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    dir_path = os.path.join(dir_path, "../models/", agent.name +
-                            "_" + strftime("%Y-%m-%d_%H-%M-%S", gmtime()))
+    model_path = os.path.dirname(os.path.realpath(__file__))
+    model_path = os.path.join(model_path, "../models/")
+    model_path = os.path.join(model_path, agent.name + "_" +
+                              strftime("%Y-%m-%d_%H-%M-%S", gmtime()) + ".rl")
 
-    torch.save(data, dir_path)
-    print(f"Checkpoint saved to {dir_path}")
+    torch.save(data, model_path)
+    print(f"Checkpoint saved to {model_path}")
 
-    return dir_path
+    reward_path = model_path + ".rwd"
+
+    AgentUtils.save_rewards(reward_path, rewards)
+
+    return model_path

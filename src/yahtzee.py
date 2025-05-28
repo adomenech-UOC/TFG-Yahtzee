@@ -8,22 +8,25 @@ YAHTZEE_CATEGORIES = [
     'Small Straight', 'Large Straight', 'Yahtzee', 'Chance'
 ]
 
+
 def generate_all_actions():
     actions = []
-    
+
     # 1) All possible keep masks: 2^5 = 32
     for mask_int in range(32):
         keep_mask = [(mask_int & (1 << i)) != 0 for i in range(5)]
         # keep_mask is a list of T/F for each die
         actions.append(('reroll', keep_mask))
-    
+
     # 2) All possible scoring categories (13)
     for cat in YAHTZEE_CATEGORIES:
         actions.append(('score', cat))
 
     return actions
 
+
 ALL_ACTIONS = generate_all_actions()  # length = 32 + 13 = 45
+
 
 class YahtzeeGame:
     def __init__(self):
@@ -39,7 +42,7 @@ class YahtzeeGame:
         self.yahtzee_bonuses = 0
         self.dice = [0]*5
         self.roll_dice()
-        
+
         # Start with 0 rolls_left; it will be set to 3 internally
         # whenever the first reroll is requested each turn:
         self.rolls_left = 0
@@ -83,6 +86,18 @@ class YahtzeeGame:
             self.dice = np.where(keep_mask, self.dice, new_values)
 
         self.dice.sort()
+
+    def index_to_action(self, action_idx):
+        # Convert action index to game action
+        if action_idx < 32:
+            keep_mask = [bool(int(bit)) for bit in f"{action_idx:05b}"]
+            action = ('reroll', keep_mask)
+        else:
+            cat_idx = action_idx - 32
+            category = list(self.categories.keys())[cat_idx]
+            action = ('score', category)
+
+        return action
 
     def get_possible_moves(self):
         return [cat for cat, score in self.categories.items() if score is None]
